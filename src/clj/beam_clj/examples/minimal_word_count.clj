@@ -2,6 +2,7 @@
   (:import [beam_clj.ClojureDoFn]
            [org.apache.beam.runners.direct InProcessPipelineRunner InProcessPipelineOptions]
            [org.apache.beam.sdk Pipeline]
+           [org.apache.beam.sdk.coders StringUtf8Coder]
            [org.apache.beam.sdk.io.TextIO]
            [org.apache.beam.sdk.options PipelineOptions PipelineOptionsFactory]
            [org.apache.beam.sdk.transforms Count DoFn MapElements ParDo SimpleFunction]
@@ -18,23 +19,47 @@
     (.setRunner InProcessPipelineRunner)))
 
 (defn words [line]
-  (filter true? (string/split line #"[^a-zA-Z']+")))
+  (filter (complement string/blank?) (string/split line #"[^a-zA-Z']+")))
 
 
 (defn extract-words [ctx]
-  (let [words (-> ctx (.element) words)]
-    (dorun (map #(.output ctx %) words))
+  (let [w (-> ctx (.element) words)]
+    (dorun (map #(.output ctx %) w))
     )
   )
 
-(defn dofn [] (beam_clj.ClojureDoFn. extract-words))
+(defn format-kv [ctx]
+  (let [kv (.element ctx)
+        output (str (.getKey kv) " " (.getValue kv))]
+    (.output ctx output)
+    )
+  )
+
+(defn format-kv-fn []
+  (beam_clj.ClojureDoFn. "beam-clj.examples.minimal-word-count" "format-kv")
+  )
+
+(defn dofn [] (beam_clj.ClojureDoFn. "beam-clj.examples.minimal-word-count" "extract-words"))
 
 (defn do-it []
   (let [p (Pipeline/create (pipeline-options))]
-    (doto p
-      (.apply (org.apache.beam.sdk.io.TextIO$Read/from "./sample-data/shakespeare.txt"))
+    (-> p
+        (.apply (org.apache.beam.sdk.io.TextIO$Read/from
+                 "./sample-data/shakespeare.txt"))
+        (.apply "ExtractWords" (ParDo/of (dofn)))
+        (.setCoder (StringUtf8Coder/of))
+        (.apply (Count/perElement))
+        (.apply "FormatResult" (ParDo/of (format-kv-fn)))
+        (.setCoder (StringUtf8Coder/of))
+        (.apply (org.apache.beam.sdk.io.TextIO$Write/to
+                 "./sample-data/out.txt"))
+
+        )
+    (.run p)
+    #_(doto p
+      (.apply (org.apache.beam.sdk.io.TextIO$Read/from
+               "./sample-data/shakespeare.txt"))
       (.apply "ExtractWords" (ParDo/of (dofn)))
-      (.run)
       )
 
     )
