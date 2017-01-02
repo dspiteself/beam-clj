@@ -8,7 +8,9 @@
            [org.apache.beam.sdk.transforms Count DoFn MapElements ParDo SimpleFunction]
            [org.apache.beam.sdk.transforms.DoFn]
            [org.apache.beam.sdk.values KV])
-  (:require [clojure.string :as string]))
+  (:require [clojure.string :as string]
+            [beam-clj.transform :as transform]
+            [clojure.java.io :as io]))
 
 ;; https://github.com/apache/incubator-beam/blob/master/examples/java/src/main/java/org/apache/beam/examples/MinimalWordCount.java
 
@@ -58,3 +60,14 @@
     (.run p)
     )
   )
+
+
+(comment
+  ;; Want it to look like this:
+  (-> pipeline-options
+      Pipeline/create
+      (.apply (beamio/read-text "./sample-data/shakespeare.txt"))
+      (.apply "ExtractWords" (-> extract-words transform/dofn transform/pardo))
+      (.apply (Count/perElement))
+      (.apply "FormatResult" (-> format-kv-fn transform/dofn transform/pardo))
+      (.apply (beamio/write-text "./sample-data/out.txt"))))
