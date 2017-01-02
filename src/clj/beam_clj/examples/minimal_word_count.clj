@@ -1,6 +1,6 @@
 (ns beam-clj.examples.minimal-word-count
   (:import [beam_clj.ClojureDoFn]
-           [org.apache.beam.runners.direct InProcessPipelineRunner InProcessPipelineOptions]
+           [org.apache.beam.runners.direct DirectRunner DirectOptions]
            [org.apache.beam.sdk Pipeline]
            [org.apache.beam.sdk.coders StringUtf8Coder]
            [org.apache.beam.sdk.io.TextIO]
@@ -14,9 +14,9 @@
 
 (defn pipeline-options []
   (doto (PipelineOptionsFactory/create)
-    (.as InProcessPipelineOptions)
+    (.as DirectOptions)
     (.setTempLocation "/tmp")
-    (.setRunner InProcessPipelineRunner)))
+    (.setRunner DirectRunner)))
 
 (defn words [line]
   (filter (complement string/blank?) (string/split line #"[^a-zA-Z']+")))
@@ -56,11 +56,5 @@
 
         )
     (.run p)
-    #_(doto p
-      (.apply (org.apache.beam.sdk.io.TextIO$Read/from
-               "./sample-data/shakespeare.txt"))
-      (.apply "ExtractWords" (ParDo/of (dofn)))
-      )
-
     )
   )

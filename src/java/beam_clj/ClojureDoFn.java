@@ -2,11 +2,12 @@ package beam_clj;
 
 import org.apache.beam.sdk.transforms.DoFn;
 import clojure.lang.IFn;
+import clojure.lang.Obj;
 import clojure.java.api.Clojure;
 import clojure.lang.Symbol;
 
 
-public class ClojureDoFn extends DoFn {
+public class ClojureDoFn extends DoFn<Obj, Obj> {
     String ns;
     String name;
 
@@ -25,7 +26,7 @@ public class ClojureDoFn extends DoFn {
         f = Clojure.var(this.ns, this.name);
         return f;
     }
-    @Override
+    @ProcessElement
     public void processElement(ProcessContext c) {
         getF().invoke(c);
     }
