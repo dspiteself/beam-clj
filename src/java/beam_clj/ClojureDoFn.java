@@ -10,7 +10,8 @@ import clojure.lang.Symbol;
 public class ClojureDoFn extends DoFn<Obj, Obj> {
     String ns;
     String name;
-
+    private static IFn REQUIRE = Clojure.var("clojure.core", "require");
+    private static IFn SYMBOL = Clojure.var("clojure.core", "symbol");
     private IFn f;
 
     public ClojureDoFn(String ns, String name) {
@@ -23,6 +24,7 @@ public class ClojureDoFn extends DoFn<Obj, Obj> {
         if (f != null) {
             return f;
         }
+        REQUIRE.invoke(SYMBOL.invoke(ns));
         f = Clojure.var(this.ns, this.name);
         return f;
     }
