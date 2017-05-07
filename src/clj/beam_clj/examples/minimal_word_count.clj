@@ -7,18 +7,26 @@
            [org.apache.beam.sdk.options PipelineOptions PipelineOptionsFactory]
            [org.apache.beam.sdk.transforms Count DoFn MapElements ParDo SimpleFunction]
            [org.apache.beam.sdk.transforms.DoFn]
-           [org.apache.beam.sdk.values KV])
+           [org.apache.beam.sdk.values KV]
+           (org.apache.beam.runners.dataflow.options DataflowPipelineOptions)
+           (org.apache.beam.runners.dataflow DataflowRunner)
+           (org.apache.beam.sdk.io TextIO$Read TextIO$Write))
   (:require [clojure.string :as string]
             [beam-clj.transform :as transform]
             [clojure.java.io :as io]))
 
 ;; https://github.com/apache/incubator-beam/blob/master/examples/java/src/main/java/org/apache/beam/examples/MinimalWordCount.java
-
-(defn pipeline-options []
+(defn pipeline-options [{:keys [tmp]}]
   (doto (PipelineOptionsFactory/create)
     (.as DirectOptions)
-    (.setTempLocation "/tmp")
+    (.setTempLocation tmp)
     (.setRunner DirectRunner)))
+
+(defn dataflow-pipeline-options [{:keys [tmp]}]
+  (doto ^DataflowPipelineOptions (PipelineOptionsFactory/create)
+    (.as DataflowPipelineOptions)
+    (.setTempLocation tmp)
+    (.setRunner DataflowRunner)))
 
 (defn words [line]
   (filter (complement string/blank?) (string/split line #"[^a-zA-Z']+")))
@@ -37,26 +45,18 @@
     )
   )
 
-(defn format-kv-fn []
-  (beam_clj.ClojureDoFn. "beam-clj.examples.minimal-word-count" "format-kv")
-  )
-
-(defn dofn [] (beam_clj.ClojureDoFn. "beam-clj.examples.minimal-word-count" "extract-words"))
-
 (defn do-it []
-  (let [p (Pipeline/create (pipeline-options))]
+  (let [p (Pipeline/create (pipeline-options {:tmp "/tmp" #_"gs://test-dflow"}))]
     (-> p
-        (.apply (org.apache.beam.sdk.io.TextIO$Read/from
-                 "./sample-data/shakespeare.txt"))
-        (.apply "ExtractWords" (ParDo/of (dofn)))
-        (.setCoder (StringUtf8Coder/of))
-        (.apply (Count/perElement))
-        (.apply "FormatResult" (ParDo/of (format-kv-fn)))
-        (.setCoder (StringUtf8Coder/of))
-        (.apply (org.apache.beam.sdk.io.TextIO$Write/to
-                 "./sample-data/out.txt"))
-
-        )
+      (.apply (TextIO$Read/from
+                "./sample-data/shakespeare.txt"))
+      (.apply "ExtractWords" (-> extract-words transform/dofn ParDo/of))
+      (.setCoder (StringUtf8Coder/of))
+      (.apply (Count/perElement))
+      (.apply "FormatResult" (-> format-kv transform/dofn ParDo/of))
+      (.setCoder (StringUtf8Coder/of))
+      (.apply (TextIO$Write/to
+                "./sample-data/out.txt")))
     (.run p)
     )
   )
@@ -64,10 +64,10 @@
 
 (comment
   ;; Want it to look like this:
-  (-> pipeline-options
-      Pipeline/create
-      (.apply (beamio/read-text "./sample-data/shakespeare.txt"))
-      (.apply "ExtractWords" (-> extract-words transform/dofn transform/pardo))
-      (.apply (Count/perElement))
-      (.apply "FormatResult" (-> format-kv-fn transform/dofn transform/pardo))
-      (.apply (beamio/write-text "./sample-data/out.txt"))))
+  (-> (pipeline-options {:tmp "/tmp" #_"gs://test-dflow"})
+    Pipeline/create
+    (.apply (beamio/read-text "./sample-data/shakespeare.txt"))
+    (.apply "ExtractWords" (-> extract-words transform/dofn transform/pardo))
+    (.apply (Count/perElement))
+    (.apply "FormatResult" (-> format-kv-fn transform/dofn transform/pardo))
+    (.apply (beamio/write-text "./sample-data/out.txt"))))
